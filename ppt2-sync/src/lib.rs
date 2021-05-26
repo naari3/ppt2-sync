@@ -1,6 +1,7 @@
 #[warn(non_snake_case)]
 use winapi::shared::minwindef::*;
 
+use winapi::um::consoleapi::AllocConsole;
 use winapi::um::winnt::DLL_PROCESS_ATTACH;
 use winapi::um::winuser::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
 
@@ -8,6 +9,7 @@ use winapi::um::winuser::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
 pub unsafe extern "system" fn DllMain(_: HINSTANCE, reason: u32, _: u32) -> BOOL {
     match reason {
         DLL_PROCESS_ATTACH => {
+            AllocConsole();
             let s = "DLL_PROCESS_ATTACH\0".to_string();
             msg(&s);
         }

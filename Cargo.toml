@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "ppt2-sync",
+    "injector",
+]

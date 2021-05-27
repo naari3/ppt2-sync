@@ -1,6 +1,4 @@
 use std::ffi::CStr;
-use std::ffi::CString;
-use std::panic;
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
@@ -25,7 +23,6 @@ use winapi::um::tlhelp32::Module32Next;
 use winapi::um::tlhelp32::MODULEENTRY32;
 use winapi::um::tlhelp32::TH32CS_SNAPMODULE;
 use winapi::um::tlhelp32::TH32CS_SNAPMODULE32;
-use winapi::um::wincon::FreeConsole;
 use winapi::um::winnt::DLL_PROCESS_ATTACH;
 use winapi::um::winnt::EXCEPTION_POINTERS;
 use winapi::um::winuser::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
@@ -202,7 +199,7 @@ unsafe fn get_module_base_address(pid: u32, mod_name: &str) -> Result<u64> {
     }
     let mut entry = MODULEENTRY32::default();
     entry.dwSize = std::mem::size_of::<MODULEENTRY32>() as u32;
-    let mut addr = 0;
+    let addr;
     w!(Module32First(ss, &mut entry));
     loop {
         let mut sz_module = [0; 256];

@@ -1,5 +1,5 @@
 use std::ffi::CString;
-use std::mem;
+use std::fs::canonicalize;
 use std::ptr::null_mut;
 
 use winapi::shared::minwindef::*;
@@ -29,12 +29,9 @@ use winapi::um::winnt::PROCESS_VM_WRITE;
 fn main() {
     println!("====== injector ======");
     let pid = find_ppt_process().expect("Could not find ppt2 process.");
+    let path = canonicalize("..\\target\\debug\\ppt2_sync.dll").unwrap();
     unsafe {
-        inject_dll(
-            pid,
-            "C:\\Users\\naari\\src\\github.com\\naari3\\ppt2-sync\\target\\debug\\ppt2_sync.dll",
-        )
-        .unwrap();
+        inject_dll(pid, path.to_str().unwrap()).unwrap();
     }
 }
 
@@ -146,7 +143,7 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<(), &'a str> {
 
     let lla = get_fn_addr("Kernel32.dll", "LoadLibraryA")?;
     type ThreadStartRoutine = unsafe extern "system" fn(LPVOID) -> DWORD;
-    let start_routine: ThreadStartRoutine = mem::transmute(lla);
+    let start_routine: ThreadStartRoutine = std::mem::transmute(lla);
 
     let remote_thread = CreateRemoteThread(
         process,

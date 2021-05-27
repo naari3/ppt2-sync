@@ -1,0 +1,13 @@
+[package]
+name = "libppt2-sync"
+version = "0.1.0"
+authors = ["naari3 <naari.named@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+named_pipe = "0.4.1"

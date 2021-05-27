@@ -104,6 +104,7 @@ fn find_ppt_process() -> Option<u32> {
 }
 
 unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<(), &'a str> {
+    println!("Open process");
     let process = OpenProcess(
         PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE,
         FALSE,
@@ -116,6 +117,7 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<(), &'a str> {
     let dll_path_str = CString::new(dll_path).unwrap();
     let dll_path_size = dll_path_str.as_bytes_with_nul().len();
 
+    println!("Allocate for dll path");
     let remote_buff = VirtualAllocEx(
         process,
         null_mut(),
@@ -127,6 +129,7 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<(), &'a str> {
         panic!("GetLastError: {}", GetLastError());
     }
 
+    println!("Write dll path");
     let dw_size = dll_path.len() + 1;
     let mut dw_write = 0;
     w!(WriteProcessMemory(
@@ -141,10 +144,12 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<(), &'a str> {
         panic!("GetLastError: {}", GetLastError());
     }
 
+    println!("Get LoadLibraryA address");
     let lla = get_fn_addr("Kernel32.dll", "LoadLibraryA")?;
     type ThreadStartRoutine = unsafe extern "system" fn(LPVOID) -> DWORD;
     let start_routine: ThreadStartRoutine = std::mem::transmute(lla);
 
+    println!("Execute dll");
     let remote_thread = CreateRemoteThread(
         process,
         null_mut(),
@@ -155,6 +160,7 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<(), &'a str> {
         null_mut(),
     );
 
+    println!("Wait to completed thread");
     WaitForSingleObject(remote_thread, INFINITE);
 
     Ok(())

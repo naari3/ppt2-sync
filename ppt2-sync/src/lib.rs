@@ -13,7 +13,7 @@ use once_cell::sync::Lazy;
 use winapi::shared::minwindef::*;
 use winapi::shared::ntdef::NULL;
 
-// use winapi::um::consoleapi::AllocConsole;
+use winapi::um::consoleapi::AllocConsole;
 use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::handleapi::CloseHandle;
@@ -29,9 +29,9 @@ use winapi::um::tlhelp32::Module32Next;
 use winapi::um::tlhelp32::MODULEENTRY32;
 use winapi::um::tlhelp32::TH32CS_SNAPMODULE;
 use winapi::um::tlhelp32::TH32CS_SNAPMODULE32;
+// use winapi::um::wincon::FreeConsole;
 use winapi::um::winnt::DLL_PROCESS_ATTACH;
 use winapi::um::winnt::EXCEPTION_POINTERS;
-// use winapi::um::winuser::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
 use winapi::vc::excpt::EXCEPTION_CONTINUE_EXECUTION;
 use winapi::vc::excpt::EXCEPTION_CONTINUE_SEARCH;
 
@@ -109,16 +109,18 @@ static SYNC_STATUS: Lazy<Mutex<SyncStatus>> = Lazy::new(|| Mutex::new(SyncStatus
 pub unsafe extern "system" fn DllMain(_: HINSTANCE, reason: u32, _: u32) -> BOOL {
     match reason {
         DLL_PROCESS_ATTACH => {
-            // AllocConsole();
-            match ppt2_main() {
-                Ok(_) => {
-                    println!("safe")
-                }
-                Err(err) => {
-                    println!("fatal: {}", err);
-                }
-            };
-            // FreeConsole();
+            std::thread::spawn(|| {
+                AllocConsole();
+                match ppt2_main() {
+                    Ok(_) => {
+                        println!("safe")
+                    }
+                    Err(err) => {
+                        println!("fatal: {}", err);
+                    }
+                };
+                // FreeConsole();
+            });
         }
         _ => {}
     }
@@ -167,20 +169,6 @@ fn ppt2_main() -> Result<()> {
 
     Ok(())
 }
-
-// fn msg(caption: &str, message: &str) {
-//     let lp_text: Vec<u16> = message.encode_utf16().collect();
-//     let lp_caption: Vec<u16> = caption.encode_utf16().collect();
-
-//     unsafe {
-//         MessageBoxW(
-//             std::ptr::null_mut(),
-//             lp_text.as_ptr(),
-//             lp_caption.as_ptr(),
-//             MB_OK | MB_ICONINFORMATION,
-//         );
-//     }
-// }
 
 unsafe extern "system" fn veh(exception: *mut EXCEPTION_POINTERS) -> i32 {
     if (*(*exception).ExceptionRecord).ExceptionCode == EXCEPTION_BREAKPOINT {
@@ -243,10 +231,6 @@ unsafe fn sync(waiter: Receiver<()>, new: Receiver<Sender<()>>) -> Result<()> {
         if clients.is_empty() {
             break;
         }
-
-        // let caption = "Sync\0".to_string();
-        // let message = "Send\0".to_string();
-        // msg(&caption, &message);
         // println!("Sent!");
 
         *(SYNC_STATUS.lock()?) = SyncStatus::SentNotification;

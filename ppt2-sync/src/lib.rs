@@ -110,7 +110,7 @@ pub unsafe extern "system" fn DllMain(_: HINSTANCE, reason: u32, _: u32) -> BOOL
     match reason {
         DLL_PROCESS_ATTACH => {
             // AllocConsole();
-            match ppt_main() {
+            match ppt2_main() {
                 Ok(_) => {
                     println!("safe")
                 }
@@ -125,8 +125,8 @@ pub unsafe extern "system" fn DllMain(_: HINSTANCE, reason: u32, _: u32) -> BOOL
     TRUE
 }
 
-fn ppt_main() -> Result<()> {
-    let mut listener = PipeOptions::new("\\\\.\\pipe\\ppt-sync").single()?;
+fn ppt2_main() -> Result<()> {
+    let mut listener = PipeOptions::new("\\\\.\\pipe\\ppt2-sync").single()?;
     println!();
 
     let (done, waiter) = channel();
@@ -135,7 +135,7 @@ fn ppt_main() -> Result<()> {
     std::thread::spawn(move || {
         let _: Result<()> = (|| loop {
             let mut connection = listener.wait()?;
-            listener = PipeOptions::new("\\\\.\\pipe\\ppt-sync")
+            listener = PipeOptions::new("\\\\.\\pipe\\ppt2-sync")
                 .first(false)
                 .single()?;
             let (notifier, wait) = channel();

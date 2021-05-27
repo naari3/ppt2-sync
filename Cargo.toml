@@ -2,5 +2,7 @@
 
 members = [
     "ppt2-sync",
+    "libppt2-sync",
     "injector",
+    "sync-test"
 ]

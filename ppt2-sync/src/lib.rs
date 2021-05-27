@@ -114,7 +114,7 @@ pub unsafe extern "system" fn DllMain(_: HINSTANCE, reason: u32, _: u32) -> BOOL
                 AllocConsole();
                 match ppt2_main() {
                     Ok(_) => {
-                        println!("safe")
+                        println!("safe exit")
                     }
                     Err(err) => {
                         println!("fatal: {}", err);

@@ -8,7 +8,7 @@ fn main() -> std::io::Result<()> {
             println!("fatal!");
             break;
         }
-        println!("frame");
+        println!("{} frame", frame_count);
         frame_count += 1;
         if frame_count > 1000 {
             break;

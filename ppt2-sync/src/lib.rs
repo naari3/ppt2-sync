@@ -1,13 +1,19 @@
 use std::ffi::CStr;
+use std::io::Read;
+use std::io::Write;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 
+use named_pipe::PipeOptions;
 use once_cell::sync::Lazy;
 
 #[warn(non_snake_case)]
 use winapi::shared::minwindef::*;
 use winapi::shared::ntdef::NULL;
 
-use winapi::um::consoleapi::AllocConsole;
+// use winapi::um::consoleapi::AllocConsole;
 use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::handleapi::CloseHandle;
@@ -25,7 +31,7 @@ use winapi::um::tlhelp32::TH32CS_SNAPMODULE;
 use winapi::um::tlhelp32::TH32CS_SNAPMODULE32;
 use winapi::um::winnt::DLL_PROCESS_ATTACH;
 use winapi::um::winnt::EXCEPTION_POINTERS;
-use winapi::um::winuser::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
+// use winapi::um::winuser::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
 use winapi::vc::excpt::EXCEPTION_CONTINUE_EXECUTION;
 use winapi::vc::excpt::EXCEPTION_CONTINUE_SEARCH;
 
@@ -103,8 +109,8 @@ static SYNC_STATUS: Lazy<Mutex<SyncStatus>> = Lazy::new(|| Mutex::new(SyncStatus
 pub unsafe extern "system" fn DllMain(_: HINSTANCE, reason: u32, _: u32) -> BOOL {
     match reason {
         DLL_PROCESS_ATTACH => {
-            AllocConsole();
-            match sync() {
+            // AllocConsole();
+            match ppt_main() {
                 Ok(_) => {
                     println!("safe")
                 }
@@ -119,19 +125,62 @@ pub unsafe extern "system" fn DllMain(_: HINSTANCE, reason: u32, _: u32) -> BOOL
     TRUE
 }
 
-fn msg(caption: &str, message: &str) {
-    let lp_text: Vec<u16> = message.encode_utf16().collect();
-    let lp_caption: Vec<u16> = caption.encode_utf16().collect();
+fn ppt_main() -> Result<()> {
+    let mut listener = PipeOptions::new("\\\\.\\pipe\\ppt-sync").single()?;
+    println!();
+
+    let (done, waiter) = channel();
+    let (notifs, conns) = channel();
+
+    std::thread::spawn(move || {
+        let _: Result<()> = (|| loop {
+            let mut connection = listener.wait()?;
+            listener = PipeOptions::new("\\\\.\\pipe\\ppt-sync")
+                .first(false)
+                .single()?;
+            let (notifier, wait) = channel();
+            notifs.send(notifier)?;
+            let done = done.clone();
+            std::thread::spawn(move || {
+                let _: Result<_> = (|| loop {
+                    wait.recv()?;
+                    let good = (|| {
+                        connection.write(&[0])?;
+                        connection.flush()?;
+                        connection.read_exact(&mut [0])
+                    })()
+                    .is_ok();
+                    if !good {
+                        drop(wait);
+                        done.send(())?;
+                        return Ok(());
+                    }
+                    done.send(())?;
+                })();
+            });
+        })();
+    });
 
     unsafe {
-        MessageBoxW(
-            std::ptr::null_mut(),
-            lp_text.as_ptr(),
-            lp_caption.as_ptr(),
-            MB_OK | MB_ICONINFORMATION,
-        );
+        sync(waiter, conns)?;
     }
+
+    Ok(())
 }
+
+// fn msg(caption: &str, message: &str) {
+//     let lp_text: Vec<u16> = message.encode_utf16().collect();
+//     let lp_caption: Vec<u16> = caption.encode_utf16().collect();
+
+//     unsafe {
+//         MessageBoxW(
+//             std::ptr::null_mut(),
+//             lp_text.as_ptr(),
+//             lp_caption.as_ptr(),
+//             MB_OK | MB_ICONINFORMATION,
+//         );
+//     }
+// }
 
 unsafe extern "system" fn veh(exception: *mut EXCEPTION_POINTERS) -> i32 {
     if (*(*exception).ExceptionRecord).ExceptionCode == EXCEPTION_BREAKPOINT {
@@ -155,16 +204,19 @@ unsafe extern "system" fn veh(exception: *mut EXCEPTION_POINTERS) -> i32 {
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
-unsafe fn sync() -> Result<()> {
-    println!("do sync");
-
+unsafe fn sync(waiter: Receiver<()>, new: Receiver<Sender<()>>) -> Result<()> {
     let pid = GetCurrentProcessId();
     let base_address = get_module_base_address(pid, "PuyoPuyoTetris2.exe")?;
-    println!("base address: 0x{:x}", base_address);
+    // println!("base address: 0x{:x}", base_address);
     let instruction_address = base_address + 0x004B3306;
     INSTRUCTION_BREAKPOINT.lock()?.address = instruction_address;
 
     AddVectoredExceptionHandler(1, Some(veh));
+
+    let mut clients = vec![];
+    if let Ok(c) = new.recv() {
+        clients.push(c);
+    }
 
     loop {
         INSTRUCTION_BREAKPOINT.lock()?.set()?;
@@ -176,9 +228,25 @@ unsafe fn sync() -> Result<()> {
             }
         }
 
-        let caption = "Sync\0".to_string();
-        let message = "Send\0".to_string();
-        msg(&caption, &message);
+        // collect new clients
+        for c in new.try_iter() {
+            clients.push(c);
+        }
+        // notify clients
+        clients.retain(|c| c.send(()).is_ok());
+
+        // wait for clients to respond
+        for _ in 0..clients.len() {
+            waiter.recv().ok();
+        }
+
+        if clients.is_empty() {
+            break;
+        }
+
+        // let caption = "Sync\0".to_string();
+        // let message = "Send\0".to_string();
+        // msg(&caption, &message);
         // println!("Sent!");
 
         *(SYNC_STATUS.lock()?) = SyncStatus::SentNotification;
@@ -190,6 +258,8 @@ unsafe fn sync() -> Result<()> {
             }
         }
     }
+
+    Ok(())
 }
 
 unsafe fn get_module_base_address(pid: u32, mod_name: &str) -> Result<u64> {

@@ -32,6 +32,7 @@ use winapi::um::tlhelp32::TH32CS_SNAPMODULE32;
 // use winapi::um::wincon::FreeConsole;
 use winapi::um::winnt::DLL_PROCESS_ATTACH;
 use winapi::um::winnt::EXCEPTION_POINTERS;
+// use winapi::um::winuser::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
 use winapi::vc::excpt::EXCEPTION_CONTINUE_EXECUTION;
 use winapi::vc::excpt::EXCEPTION_CONTINUE_SEARCH;
 
@@ -231,6 +232,12 @@ unsafe fn sync(waiter: Receiver<()>, new: Receiver<Sender<()>>) -> Result<()> {
         if clients.is_empty() {
             break;
         }
+
+        // for check frame advance
+        // let caption = "Sync\0".to_string();
+        // let message = "Step\0".to_string();
+        // msg(&caption, &message);
+
         // println!("Sent!");
 
         *(SYNC_STATUS.lock()?) = SyncStatus::SentNotification;
@@ -242,6 +249,9 @@ unsafe fn sync(waiter: Receiver<()>, new: Receiver<Sender<()>>) -> Result<()> {
             }
         }
     }
+
+    // for escape breakpoint
+    *(SYNC_STATUS.lock()?) = SyncStatus::SentNotification;
 
     Ok(())
 }
@@ -275,3 +285,17 @@ unsafe fn get_module_base_address(pid: u32, mod_name: &str) -> Result<u64> {
 
     Ok(addr)
 }
+
+// fn msg(caption: &str, message: &str) {
+//     let lp_text: Vec<u16> = message.encode_utf16().collect();
+//     let lp_caption: Vec<u16> = caption.encode_utf16().collect();
+
+//     unsafe {
+//         MessageBoxW(
+//             std::ptr::null_mut(),
+//             lp_text.as_ptr(),
+//             lp_caption.as_ptr(),
+//             MB_OK | MB_ICONINFORMATION,
+//         );
+//     }
+// }

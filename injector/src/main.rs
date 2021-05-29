@@ -1,5 +1,6 @@
 use std::ffi::CString;
 use std::fs::canonicalize;
+use std::path::Path;
 use std::ptr::null_mut;
 
 use winapi::shared::minwindef::*;
@@ -26,13 +27,25 @@ use winapi::um::winnt::PROCESS_VM_OPERATION;
 use winapi::um::winnt::PROCESS_VM_READ;
 use winapi::um::winnt::PROCESS_VM_WRITE;
 
-fn main() {
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+fn main() -> Result<()> {
     println!("====== injector ======");
     let pid = find_ppt_process().expect("Could not find ppt2 process.");
-    let path = canonicalize("..\\target\\debug\\ppt2_sync.dll").unwrap();
+    let path = if Path::new("ppt2_sync.dll").exists() {
+        canonicalize("ppt2_sync.dll")?
+    } else {
+        canonicalize("..\\target\\debug\\ppt2_sync.dll")?
+    };
     unsafe {
-        inject_dll(pid, path.to_str().unwrap()).unwrap();
+        inject_dll(
+            pid,
+            path.to_str()
+                .expect("Failed to to_str(), it maybe contains non-UTF-8 strings?"),
+        )?;
     }
+
+    Ok(())
 }
 
 macro_rules! w {
@@ -62,7 +75,7 @@ fn find_ppt_process() -> Option<u32> {
             std::mem::size_of_val(&pids) as u32,
             &mut used
         ))
-        .unwrap();
+        .expect("Failed to EnumProcess()");
 
         for &process in &pids[..used as usize / std::mem::size_of::<u32>()] {
             let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, process);
@@ -103,7 +116,7 @@ fn find_ppt_process() -> Option<u32> {
     }
 }
 
-unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<(), &'a str> {
+unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<()> {
     println!("Open process");
     let process = OpenProcess(
         PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE,
@@ -114,7 +127,7 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<(), &'a str> {
         panic!("GetLastError: {}", GetLastError());
     }
 
-    let dll_path_str = CString::new(dll_path).unwrap();
+    let dll_path_str = CString::new(dll_path)?;
     let dll_path_size = dll_path_str.as_bytes_with_nul().len();
 
     println!("Allocate for dll path");
@@ -166,20 +179,20 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<(), &'a str> {
     Ok(())
 }
 
-fn get_fn_addr<'a>(mod_name: &str, fn_name: &str) -> Result<u64, &'a str> {
-    let mod_str = CString::new(mod_name).unwrap();
-    let fn_str = CString::new(fn_name).unwrap();
+fn get_fn_addr<'a>(mod_name: &str, fn_name: &str) -> Result<u64> {
+    let mod_str = CString::new(mod_name)?;
+    let fn_str = CString::new(fn_name)?;
 
     let mod_handle = unsafe { GetModuleHandleA(mod_str.as_ptr()) };
 
     if mod_handle == null_mut() {
-        return Err("Could not get module handler");
+        return Err("Could not get module handler".to_string().into());
     }
 
     let fn_addr = unsafe { GetProcAddress(mod_handle, fn_str.as_ptr()) };
 
     if fn_addr == null_mut() {
-        return Err("Could not get function address");
+        return Err("Could not get function address".to_string().into());
     }
 
     Ok(fn_addr as u64)

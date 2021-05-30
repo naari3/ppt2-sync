@@ -11,3 +11,7 @@ crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 named_pipe = "0.4.1"
+backoff = "0.3.0"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser", "winnt", "psapi", "processthreadsapi", "errhandlingapi", "handleapi", "memoryapi", "libloaderapi", "minwinbase", "synchapi", "winbase"] }

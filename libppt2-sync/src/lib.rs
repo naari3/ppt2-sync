@@ -1,6 +1,10 @@
 use named_pipe::PipeClient;
 use std::io::prelude::*;
+use std::io::ErrorKind::NotFound;
 use std::process::{Command, Stdio};
+use std::{thread, time};
+
+mod injector;
 
 pub struct Ppt2Syncronizer {
     connection: PipeClient,
@@ -9,7 +13,24 @@ pub struct Ppt2Syncronizer {
 
 impl Ppt2Syncronizer {
     pub fn new() -> std::io::Result<Self> {
-        let connection = PipeClient::connect("\\\\.\\pipe\\ppt2-sync").or_else(|_| {
+        injector::inject().expect("Failed to inject dll!");
+        let mut count = 0;
+        let connection = loop {
+            // Pipes are created asynchronously
+            // so simply retry upto 3 times
+            match PipeClient::connect("\\\\.\\pipe\\ppt2-sync") {
+                Ok(c) => break Ok(c),
+                Err(e) => {
+                    if matches!(&e.kind(), NotFound) && count < 3 {
+                        thread::sleep(time::Duration::from_millis(100));
+                        count += 1;
+                        continue;
+                    };
+                    break Err(e);
+                }
+            }
+        }
+        .or_else(|_| {
             Command::new("ppt2-sync")
                 .stdout(Stdio::piped())
                 .spawn()

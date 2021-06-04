@@ -1,6 +1,5 @@
 use std::ffi::CString;
 use std::fs::canonicalize;
-use std::path::Path;
 use std::ptr::null_mut;
 
 use winapi::shared::minwindef::*;
@@ -30,13 +29,8 @@ use winapi::um::winnt::PROCESS_VM_WRITE;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub fn inject() -> Result<()> {
-    println!("====== injector ======");
     let pid = find_ppt_process().expect("Could not find ppt2 process.");
-    let path = if Path::new("ppt2_sync.dll").exists() {
-        canonicalize("ppt2_sync.dll")?
-    } else {
-        canonicalize("..\\target\\debug\\ppt2_sync.dll")?
-    };
+    let path = canonicalize("ppt2_sync.dll")?;
     unsafe {
         inject_dll(
             pid,
@@ -44,7 +38,6 @@ pub fn inject() -> Result<()> {
                 .expect("Failed to to_str(), it maybe contains non-UTF-8 strings?"),
         )?;
     }
-    println!("====== injector end ======");
 
     Ok(())
 }
@@ -118,7 +111,6 @@ fn find_ppt_process() -> Option<u32> {
 }
 
 unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<()> {
-    println!("Open process");
     let process = OpenProcess(
         PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE,
         FALSE,
@@ -131,7 +123,6 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<()> {
     let dll_path_str = CString::new(dll_path)?;
     let dll_path_size = dll_path_str.as_bytes_with_nul().len();
 
-    println!("Allocate for dll path");
     let remote_buff = VirtualAllocEx(
         process,
         null_mut(),
@@ -143,7 +134,6 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<()> {
         panic!("GetLastError: {}", GetLastError());
     }
 
-    println!("Write dll path");
     let dw_size = dll_path.len() + 1;
     let mut dw_write = 0;
     w!(WriteProcessMemory(
@@ -158,12 +148,10 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<()> {
         panic!("GetLastError: {}", GetLastError());
     }
 
-    println!("Get LoadLibraryA address");
     let lla = get_fn_addr("Kernel32.dll", "LoadLibraryA")?;
     type ThreadStartRoutine = unsafe extern "system" fn(LPVOID) -> DWORD;
     let start_routine: ThreadStartRoutine = std::mem::transmute(lla);
 
-    println!("Execute dll");
     let remote_thread = CreateRemoteThread(
         process,
         null_mut(),
@@ -174,7 +162,6 @@ unsafe fn inject_dll<'a>(pid: u32, dll_path: &str) -> Result<()> {
         null_mut(),
     );
 
-    println!("Wait to completed thread");
     WaitForSingleObject(remote_thread, INFINITE);
 
     Ok(())

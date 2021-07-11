@@ -14,4 +14,4 @@ once_cell = "1.7.2"
 named_pipe = "0.4.1"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winuser", "winnt", "consoleapi", "tlhelp32", "impl-default", "errhandlingapi", "handleapi", "processthreadsapi", "memoryapi"] }
+winapi = { version = "0.3", features = ["winuser", "winnt", "tlhelp32", "impl-default", "errhandlingapi", "handleapi", "processthreadsapi", "memoryapi"] }
